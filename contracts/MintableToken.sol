@@ -4,10 +4,8 @@
  * Licensed under the Apache License, version 2.0: https://github.com/TokenMarketNet/ico/blob/master/LICENSE.txt
  */
 
-import "zeppelin/contracts/token/ERC20.sol";
 import "zeppelin/contracts/ownership/Ownable.sol";
-import './StandardToken.sol';
-import "./SafeMathLib.sol";
+import "./ICOStandardToken.sol";
 
 pragma solidity ^0.4.6;
 
@@ -18,9 +16,10 @@ pragma solidity ^0.4.6;
  * Only mint agents, contracts whitelisted by owner, can mint new tokens.
  *
  */
-contract MintableToken is StandardToken, Ownable {
+contract MintableToken is ICOStandardToken, Ownable {
 
-  using SafeMathLib for uint;
+  /* Token supply got increased and a new owner received these tokens */
+  event Minted(address receiver, uint256 amount);
 
   bool public mintingFinished = false;
 
@@ -29,14 +28,30 @@ contract MintableToken is StandardToken, Ownable {
 
   event MintingAgentChanged(address addr, bool state  );
 
+  function MintableToken(address _receiver, uint256 _initialSupply, bool _mintable) internal {
+    require(_receiver != address(0));
+    // Cannot create a token without supply and no minting
+    require(_mintable || _initialSupply != 0);
+    if (_initialSupply > 0) {
+      mintInternal(_receiver, _initialSupply);
+    }
+    mintingFinished = !_mintable;
+  }
+
   /**
    * Create new tokens and allocate them to an address..
    *
    * Only callably by a crowdsale contract (mint agent).
    */
-  function mint(address receiver, uint amount) onlyMintAgent canMint public {
-    totalSupply = totalSupply.plus(amount);
-    balances[receiver] = balances[receiver].plus(amount);
+  function mint(address receiver, uint amount) onlyMintAgent public {
+    mintInternal(receiver, amount);
+  }
+
+  function mintInternal(address receiver, uint amount) canMint private {
+    totalSupply = totalSupply.add(amount);
+    balances[receiver] = balances[receiver].add(amount);
+
+    Minted(receiver, amount);
 
     // This will make the mint transaction apper in EtherScan.io
     // We can remove this after there is a standardized minting event
@@ -53,15 +68,13 @@ contract MintableToken is StandardToken, Ownable {
 
   modifier onlyMintAgent() {
     // Only crowdsale contracts are allowed to mint new tokens
-    if(!mintAgents[msg.sender]) {
-        throw;
-    }
+    require(mintAgents[msg.sender]);
     _;
   }
 
   /** Make sure we are not done yet. */
   modifier canMint() {
-    if(mintingFinished) throw;
+    require(!mintingFinished);
     _;
   }
 }

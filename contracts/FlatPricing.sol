@@ -7,14 +7,14 @@
 pragma solidity ^0.4.12;
 
 import "./PricingStrategy.sol";
-import "./SafeMathLib.sol";
+import "zeppelin/contracts/math/SafeMath.sol";
 
 /**
  * Fixed crowdsale pricing - everybody gets the same price.
  */
 contract FlatPricing is PricingStrategy {
 
-  using SafeMathLib for uint;
+  using SafeMath for uint;
 
   /* How many weis one token costs */
   uint public oneTokenInWei;
@@ -28,9 +28,9 @@ contract FlatPricing is PricingStrategy {
    * Calculate the current price for buy in amount.
    *
    */
-  function calculatePrice(uint value, uint weiRaised, uint tokensSold, address msgSender, uint decimals) public constant returns (uint) {
-    uint multiplier = 10 ** decimals;
-    return value.times(multiplier) / oneTokenInWei;
+  function calculatePrice(uint value, uint weiRaised, uint tokensSold, address msgSender, uint8 decimals) public constant returns (uint) {
+    uint multiplier = 10 ** uint(decimals);
+    return value.mul(multiplier).div(oneTokenInWei);
   }
 
 }

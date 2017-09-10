@@ -6,7 +6,7 @@
 
 pragma solidity ^0.4.8;
 
-import "./StandardToken.sol";
+import "./ICOStandardToken.sol";
 import "zeppelin/contracts/ownership/Ownable.sol";
 
 /**
@@ -52,7 +52,7 @@ contract TokenVault is Ownable {
   uint public lockedAt;
 
   /** We can also define our own token, which will override the ICO one ***/
-  StandardToken public token;
+  ICOStandardToken public token;
 
   /** What is our current state.
    *
@@ -79,31 +79,23 @@ contract TokenVault is Ownable {
    * @param _tokensToBeAllocated Total number of tokens this vault will hold - including decimal multiplcation
    *
    */
-  function TokenVault(address _owner, uint _freezeEndsAt, StandardToken _token, uint _tokensToBeAllocated) {
+  function TokenVault(address _owner, uint _freezeEndsAt, ICOStandardToken _token, uint _tokensToBeAllocated) {
+
+    // Invalid owenr
+    require(_owner != 0);
+
+    // Check the address looks like a token contract
+    require(_token.isToken());
+
+    // Give argument
+    require(_freezeEndsAt != 0);
+
+    // Sanity check on _tokensToBeAllocated
+    require(_tokensToBeAllocated != 0);
 
     owner = _owner;
 
-    // Invalid owenr
-    if(owner == 0) {
-      throw;
-    }
-
     token = _token;
-
-    // Check the address looks like a token contract
-    if(!token.isToken()) {
-      throw;
-    }
-
-    // Give argument
-    if(_freezeEndsAt == 0) {
-      throw;
-    }
-
-    // Sanity check on _tokensToBeAllocated
-    if(_tokensToBeAllocated == 0) {
-      throw;
-    }
 
     freezeEndsAt = _freezeEndsAt;
     tokensToBeAllocated = _tokensToBeAllocated;
@@ -112,17 +104,13 @@ contract TokenVault is Ownable {
   /// @dev Add a presale participating allocation
   function setInvestor(address investor, uint amount) public onlyOwner {
 
-    if(lockedAt > 0) {
-      // Cannot add new investors after the vault is locked
-      throw;
-    }
+    // Cannot add new investors after the vault is locked
+    require(lockedAt == 0);
 
-    if(amount == 0) throw; // No empty buys
+    require(amount != 0); // No empty buys
 
     // Don't allow reset
-    if(balances[investor] > 0) {
-      throw;
-    }
+    require(balances[investor] == 0);
 
     balances[investor] = amount;
 
@@ -139,19 +127,13 @@ contract TokenVault is Ownable {
   ///      - Checks are in place to prevent creating a vault that is locked with incorrect token balances.
   function lock() onlyOwner {
 
-    if(lockedAt > 0) {
-      throw; // Already locked
-    }
+    require(lockedAt == 0); // Already locked
 
     // Spreadsheet sum does not match to what we have loaded to the investor data
-    if(tokensAllocatedTotal != tokensToBeAllocated) {
-      throw;
-    }
+    require(tokensAllocatedTotal == tokensToBeAllocated);
 
     // Do not lock the vault if the given tokens are not on this contract
-    if(token.balanceOf(address(this)) != tokensAllocatedTotal) {
-      throw;
-    }
+    require(token.balanceOf(address(this)) == tokensAllocatedTotal);
 
     lockedAt = now;
 
@@ -160,9 +142,7 @@ contract TokenVault is Ownable {
 
   /// @dev In the case locking failed, then allow the owner to reclaim the tokens on the contract.
   function recoverFailedLock() onlyOwner {
-    if(lockedAt > 0) {
-      throw;
-    }
+    require(lockedAt == 0);
 
     // Transfer all tokens on this contract back to the owner
     token.transfer(owner, token.balanceOf(address(this)));
@@ -179,22 +159,13 @@ contract TokenVault is Ownable {
 
     address investor = msg.sender;
 
-    if(lockedAt == 0) {
-      throw; // We were never locked
-    }
+    require(lockedAt > 0); // We were never locked
 
-    if(now < freezeEndsAt) {
-      throw; // Trying to claim early
-    }
+    require(now >= freezeEndsAt); // Trying to claim early
 
-    if(balances[investor] == 0) {
-      // Not our investor
-      throw;
-    }
+    require(balances[investor] != 0); // Not our investor
 
-    if(claimed[investor] > 0) {
-      throw; // Already claimed
-    }
+    require(claimed[investor] == 0); // Already claimed
 
     uint amount = balances[investor];
 

@@ -6,10 +6,10 @@
 
 pragma solidity ^0.4.8;
 
-import './StandardToken.sol';
+import './ICOStandardToken.sol';
 
 
-contract BurnableToken is StandardToken {
+contract BurnableToken is ICOStandardToken {
 
   address public constant BURN_ADDRESS = 0;
 
@@ -22,8 +22,8 @@ contract BurnableToken is StandardToken {
    */
   function burn(uint burnAmount) {
     address burner = msg.sender;
-    balances[burner] = safeSub(balances[burner], burnAmount);
-    totalSupply = safeSub(totalSupply, burnAmount);
+    balances[burner] = balances[burner].sub(burnAmount);
+    totalSupply = totalSupply.sub(burnAmount);
     Burned(burner, burnAmount);
   }
 }

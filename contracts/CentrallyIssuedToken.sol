@@ -6,6 +6,7 @@
 
 pragma solidity ^0.4.6;
 
+import "./FractionalERC20.sol";
 import "./BurnableToken.sol";
 import "./UpgradeableToken.sol";
 
@@ -20,13 +21,12 @@ import "./UpgradeableToken.sol";
  * The owner, or anybody, can burn any excessive tokens they are holding.
  *
  */
-contract CentrallyIssuedToken is BurnableToken, UpgradeableToken {
+contract CentrallyIssuedToken is FractionalERC20, BurnableToken, UpgradeableToken {
 
   string public name;
   string public symbol;
-  uint public decimals;
 
-  function CentrallyIssuedToken(address _owner, string _name, string _symbol, uint _totalSupply, uint _decimals)  UpgradeableToken(_owner) {
+  function CentrallyIssuedToken(address _owner, string _name, string _symbol, uint _totalSupply, uint8 _decimals)  UpgradeableToken(_owner) {
     name = _name;
     symbol = _symbol;
     totalSupply = _totalSupply;

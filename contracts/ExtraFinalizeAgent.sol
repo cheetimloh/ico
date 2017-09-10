@@ -8,7 +8,7 @@ pragma solidity ^0.4.6;
 
 import "./Crowdsale.sol";
 import "./CrowdsaleToken.sol";
-import "./SafeMathLib.sol";
+import "zeppelin/contracts/math/SafeMath.sol";
 
 /**
  * At the end of the successful crowdsale allocate % bonus of tokens to the team.
@@ -20,7 +20,7 @@ import "./SafeMathLib.sol";
  */
 contract ExtraFinalizeAgent is FinalizeAgent {
 
-  using SafeMathLib for uint;
+  using SafeMath for uint;
 
   CrowdsaleToken public token;
   Crowdsale public crowdsale;
@@ -37,18 +37,17 @@ contract ExtraFinalizeAgent is FinalizeAgent {
   /* How many tokens other finalizers will allocate and we do not count these in */
   uint public accountedTokenSales;
 
+  /* Divisor of the base points */
+  uint private constant basePointsDivisor = 10000;
+
   function ExtraFinalizeAgent(CrowdsaleToken _token, Crowdsale _crowdsale, uint _bonusBasePoints, address _teamMultisig, uint _accountedTokenSales) {
+    require(address(_crowdsale) != 0);
+    require(address(_teamMultisig) != 0);
+
     token = _token;
     crowdsale = _crowdsale;
 
-    if(address(crowdsale) == 0) {
-      throw;
-    }
-
     teamMultisig = _teamMultisig;
-    if(address(teamMultisig) == 0) {
-      throw;
-    }
 
     accountedTokenSales = _accountedTokenSales;
   }
@@ -60,13 +59,11 @@ contract ExtraFinalizeAgent is FinalizeAgent {
 
   /** Called once by crowdsale finalize() if the sale was success. */
   function finalizeCrowdsale() {
-    if(msg.sender != address(crowdsale)) {
-      throw;
-    }
+    require(msg.sender == address(crowdsale));
 
     // How many % of tokens the founders and others get
-    uint tokensSold = crowdsale.tokensSold().minus(accountedTokenSales);
-    allocatedBonus = tokensSold.times(bonusBasePoints) / 10000;
+    uint tokensSold = crowdsale.tokensSold().sub(accountedTokenSales);
+    allocatedBonus = tokensSold.mul(bonusBasePoints).div(basePointsDivisor);
 
     // move tokens to the team multisig wallet
     token.mint(teamMultisig, allocatedBonus);

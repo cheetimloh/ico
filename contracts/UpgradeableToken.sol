@@ -6,8 +6,7 @@
 
 pragma solidity ^0.4.8;
 
-import "zeppelin/contracts/token/ERC20.sol";
-import './StandardToken.sol';
+import "./ICOStandardToken.sol";
 import "./UpgradeAgent.sol";
 
 /**
@@ -15,7 +14,7 @@ import "./UpgradeAgent.sol";
  *
  * First envisioned by Golem and Lunyr projects.
  */
-contract UpgradeableToken is StandardToken {
+contract UpgradeableToken is ICOStandardToken {
 
   /** Contract / person who can set the upgrade path. This can be the same as team multisig wallet, as what it is with its default value. */
   address public upgradeMaster;
@@ -51,7 +50,7 @@ contract UpgradeableToken is StandardToken {
    * Do not allow construction without upgrade master set.
    */
   function UpgradeableToken(address _upgradeMaster) {
-    upgradeMaster = _upgradeMaster;
+    setUpgradeMasterInternal(_upgradeMaster);
   }
 
   /**
@@ -60,19 +59,16 @@ contract UpgradeableToken is StandardToken {
   function upgrade(uint256 value) public {
 
       UpgradeState state = getUpgradeState();
-      if(!(state == UpgradeState.ReadyToUpgrade || state == UpgradeState.Upgrading)) {
-        // Called in a bad state
-        throw;
-      }
+      require(state == UpgradeState.ReadyToUpgrade || state == UpgradeState.Upgrading);
 
       // Validate input value.
-      if (value == 0) throw;
+      require(value != 0);
 
-      balances[msg.sender] = safeSub(balances[msg.sender], value);
+      balances[msg.sender] = balances[msg.sender].sub(value);
 
       // Take tokens out from circulation
-      totalSupply = safeSub(totalSupply, value);
-      totalUpgraded = safeAdd(totalUpgraded, value);
+      totalSupply = totalSupply.sub(value);
+      totalUpgraded = totalUpgraded.add(value);
 
       // Upgrade agent reissues the tokens
       upgradeAgent.upgradeFrom(msg.sender, value);
@@ -84,23 +80,20 @@ contract UpgradeableToken is StandardToken {
    */
   function setUpgradeAgent(address agent) external {
 
-      if(!canUpgrade()) {
-        // The token is not yet in a state that we could think upgrading
-        throw;
-      }
+      require(canUpgrade());
 
-      if (agent == 0x0) throw;
+      require(agent != 0x0);
       // Only a master can designate the next agent
-      if (msg.sender != upgradeMaster) throw;
+      require(msg.sender == upgradeMaster);
       // Upgrade has already begun for an agent
-      if (getUpgradeState() == UpgradeState.Upgrading) throw;
+      require(getUpgradeState() != UpgradeState.Upgrading);
 
       upgradeAgent = UpgradeAgent(agent);
 
       // Bad interface
-      if(!upgradeAgent.isUpgradeAgent()) throw;
+      require(upgradeAgent.isUpgradeAgent());
       // Make sure that token supplies match in source and target
-      if (upgradeAgent.originalSupply() != totalSupply) throw;
+      require(upgradeAgent.originalSupply() == totalSupply);
 
       UpgradeAgentSet(upgradeAgent);
   }
@@ -121,8 +114,12 @@ contract UpgradeableToken is StandardToken {
    * This allows us to set a new owner for the upgrade mechanism.
    */
   function setUpgradeMaster(address master) public {
-      if (master == 0x0) throw;
-      if (msg.sender != upgradeMaster) throw;
+      require(msg.sender == upgradeMaster);
+      setUpgradeMasterInternal(master);
+  }
+
+  function setUpgradeMasterInternal(address master) private {
+      require(master != 0x0);
       upgradeMaster = master;
   }
 

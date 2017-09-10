@@ -1,17 +1,16 @@
 pragma solidity ^0.4.8;
 
-import "../SafeMathLib.sol";
+import "zeppelin/contracts/math/SafeMath.sol";
 import "../UpgradeableToken.sol";
-import "../MintableToken.sol";
 
 /**
  * A sample token that is used as a migration testing target.
  *
  * This is not an actual token, but just a stub used in testing.
  */
-contract TestMigrationTarget is StandardToken, UpgradeAgent {
+contract TestMigrationTarget is ICOStandardToken, UpgradeAgent {
 
-  using SafeMathLib for uint;
+  using SafeMath for uint;
 
   UpgradeableToken public oldToken;
 
@@ -22,28 +21,24 @@ contract TestMigrationTarget is StandardToken, UpgradeAgent {
     oldToken = _oldToken;
 
     // Let's not set bad old token
-    if(address(oldToken) == 0) {
-      throw;
-    }
+    require(address(oldToken) != 0);
 
     // Let's make sure we have something to migrate
     originalSupply = _oldToken.totalSupply();
-    if(originalSupply == 0) {
-      throw;
-    }
+    require(originalSupply != 0);
   }
 
   function upgradeFrom(address _from, uint256 _value) public {
-    if (msg.sender != address(oldToken)) throw; // only upgrade from oldToken
+    require(msg.sender == address(oldToken)); // only upgrade from oldToken
 
     // Mint new tokens to the migrator
-    totalSupply = totalSupply.plus(_value);
-    balances[_from] = balances[_from].plus(_value);
+    totalSupply = totalSupply.add(_value);
+    balances[_from] = balances[_from].add(_value);
     Transfer(0, _from, _value);
   }
 
   function() public payable {
-    throw;
+    require(false);
   }
 
 }

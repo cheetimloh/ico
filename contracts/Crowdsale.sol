@@ -6,7 +6,7 @@
 
 pragma solidity ^0.4.8;
 
-import "./SafeMathLib.sol";
+import "zeppelin/contracts/math/SafeMath.sol";
 import "./Haltable.sol";
 import "./PricingStrategy.sol";
 import "./FinalizeAgent.sol";
@@ -30,7 +30,7 @@ contract Crowdsale is Haltable {
   /* Max investment count when we are still allowed to change the multisig address */
   uint public MAX_INVESTMENTS_BEFORE_MULTISIG_CHANGE = 5;
 
-  using SafeMathLib for uint;
+  using SafeMath for uint;
 
   /* The token we are selling */
   FractionalERC20 public token;
@@ -127,6 +127,12 @@ contract Crowdsale is Haltable {
 
   function Crowdsale(address _token, PricingStrategy _pricingStrategy, address _multisigWallet, uint _start, uint _end, uint _minimumFundingGoal) {
 
+    require(_multisigWallet != 0);
+    require(_start != 0 && _end != 0);
+
+    // Don't mess the dates
+    require(_start < _end);
+
     owner = msg.sender;
 
     token = FractionalERC20(_token);
@@ -134,26 +140,9 @@ contract Crowdsale is Haltable {
     setPricingStrategy(_pricingStrategy);
 
     multisigWallet = _multisigWallet;
-    if(multisigWallet == 0) {
-        throw;
-    }
-
-    if(_start == 0) {
-        throw;
-    }
-
     startsAt = _start;
 
-    if(_end == 0) {
-        throw;
-    }
-
     endsAt = _end;
-
-    // Don't mess the dates
-    if(startsAt >= endsAt) {
-        throw;
-    }
 
     // Minimum funding goal can be zero
     minimumFundingGoal = _minimumFundingGoal;
@@ -163,7 +152,7 @@ contract Crowdsale is Haltable {
    * Don't expect to just send in money and get tokens.
    */
   function() payable {
-    throw;
+    require(false);
   }
 
   /**
@@ -181,26 +170,21 @@ contract Crowdsale is Haltable {
     // Determine if it's a good time to accept investment from this participant
     if(getState() == State.PreFunding) {
       // Are we whitelisted for early deposit
-      if(!earlyParticipantWhitelist[receiver]) {
-        throw;
-      }
+      require(earlyParticipantWhitelist[receiver]);
     } else if(getState() == State.Funding) {
       // Retail participants can only come in when the crowdsale is running
       // pass
     } else {
       // Unwanted state
-      throw;
+      assert(false);
     }
 
     uint weiAmount = msg.value;
 
     // Account presale sales separately, so that they do not count against pricing tranches
-    uint tokenAmount = pricingStrategy.calculatePrice(weiAmount, weiRaised - presaleWeiRaised, tokensSold, msg.sender, token.decimals());
+    uint tokenAmount = pricingStrategy.calculatePrice(weiAmount, weiRaised.sub(presaleWeiRaised), tokensSold, msg.sender, token.decimals());
 
-    if(tokenAmount == 0) {
-      // Dust transaction
-      throw;
-    }
+    require(tokenAmount != 0); // Dust transaction
 
     if(investedAmountOf[receiver] == 0) {
        // A new investor
@@ -208,26 +192,24 @@ contract Crowdsale is Haltable {
     }
 
     // Update investor
-    investedAmountOf[receiver] = investedAmountOf[receiver].plus(weiAmount);
-    tokenAmountOf[receiver] = tokenAmountOf[receiver].plus(tokenAmount);
+    investedAmountOf[receiver] = investedAmountOf[receiver].add(weiAmount);
+    tokenAmountOf[receiver] = tokenAmountOf[receiver].add(tokenAmount);
 
     // Update totals
-    weiRaised = weiRaised.plus(weiAmount);
-    tokensSold = tokensSold.plus(tokenAmount);
+    weiRaised = weiRaised.add(weiAmount);
+    tokensSold = tokensSold.add(tokenAmount);
 
     if(pricingStrategy.isPresalePurchase(receiver)) {
-        presaleWeiRaised = presaleWeiRaised.plus(weiAmount);
+        presaleWeiRaised = presaleWeiRaised.add(weiAmount);
     }
 
     // Check that we did not bust the cap
-    if(isBreakingCap(weiAmount, tokenAmount, weiRaised, tokensSold)) {
-      throw;
-    }
+    require(!isBreakingCap(weiAmount, tokenAmount, weiRaised, tokensSold));
 
     assignTokens(receiver, tokenAmount);
 
     // Pocket the money
-    if(!multisigWallet.send(weiAmount)) throw;
+    require(multisigWallet.send(weiAmount));
 
     // Tell us invest was success
     Invested(receiver, weiAmount, tokenAmount, customerId);
@@ -250,14 +232,17 @@ contract Crowdsale is Haltable {
    */
   function preallocate(address receiver, uint fullTokens, uint weiPrice) public onlyOwner {
 
-    uint tokenAmount = fullTokens * 10**token.decimals();
-    uint weiAmount = weiPrice * fullTokens; // This can be also 0, we give out tokens for free
+    require(receiver != address(0));
 
-    weiRaised = weiRaised.plus(weiAmount);
-    tokensSold = tokensSold.plus(tokenAmount);
+    uint tokenAmount = fullTokens.mul(10**uint(token.decimals()));
+    require(tokenAmount != 0);
+    uint weiAmount = weiPrice.mul(fullTokens); // This can be also 0, we give out tokens for free
 
-    investedAmountOf[receiver] = investedAmountOf[receiver].plus(weiAmount);
-    tokenAmountOf[receiver] = tokenAmountOf[receiver].plus(tokenAmount);
+    weiRaised = weiRaised.add(weiAmount);
+    tokensSold = tokensSold.add(tokenAmount);
+
+    investedAmountOf[receiver] = investedAmountOf[receiver].add(weiAmount);
+    tokenAmountOf[receiver] = tokenAmountOf[receiver].add(tokenAmount);
 
     assignTokens(receiver, tokenAmount);
 
@@ -270,8 +255,8 @@ contract Crowdsale is Haltable {
    */
   function investWithSignedAddress(address addr, uint128 customerId, uint8 v, bytes32 r, bytes32 s) public payable {
      bytes32 hash = sha256(addr);
-     if (ecrecover(hash, v, r, s) != signerAddress) throw;
-     if(customerId == 0) throw;  // UUIDv4 sanity check
+     require(ecrecover(hash, v, r, s) == signerAddress);
+     require(customerId != 0);  // UUIDv4 sanity check
      investInternal(addr, customerId);
   }
 
@@ -279,8 +264,8 @@ contract Crowdsale is Haltable {
    * Track who is the customer making the payment so we can send thank you email.
    */
   function investWithCustomerId(address addr, uint128 customerId) public payable {
-    if(requiredSignedAddress) throw; // Crowdsale allows only server-side signed participants
-    if(customerId == 0) throw;  // UUIDv4 sanity check
+    require(!requiredSignedAddress); // Crowdsale allows only server-side signed participants
+    require(customerId != 0);  // UUIDv4 sanity check
     investInternal(addr, customerId);
   }
 
@@ -288,8 +273,8 @@ contract Crowdsale is Haltable {
    * Allow anonymous contributions to this crowdsale.
    */
   function invest(address addr) public payable {
-    if(requireCustomerId) throw; // Crowdsale needs to track partipants for thank you email
-    if(requiredSignedAddress) throw; // Crowdsale allows only server-side signed participants
+    require(!requireCustomerId); // Crowdsale needs to track partipants for thank you email
+    require(!requiredSignedAddress); // Crowdsale allows only server-side signed participants
     investInternal(addr, 0);
   }
 
@@ -326,9 +311,7 @@ contract Crowdsale is Haltable {
   function finalize() public inState(State.Success) onlyOwner stopInEmergency {
 
     // Already finalized
-    if(finalized) {
-      throw;
-    }
+    require(!finalized);
 
     // Finalizing is optional. We only call it if we are given a finalizing agent.
     if(address(finalizeAgent) != 0) {
@@ -344,12 +327,10 @@ contract Crowdsale is Haltable {
    * Design choice: no state restrictions on setting this, so that we can fix fat finger mistakes.
    */
   function setFinalizeAgent(FinalizeAgent addr) onlyOwner {
-    finalizeAgent = addr;
 
     // Don't allow setting bad agent
-    if(!finalizeAgent.isFinalizeAgent()) {
-      throw;
-    }
+    require(addr.isFinalizeAgent());
+    finalizeAgent = addr;
   }
 
   /**
@@ -395,9 +376,7 @@ contract Crowdsale is Haltable {
    */
   function setEndsAt(uint time) onlyOwner {
 
-    if(now > time) {
-      throw; // Don't change past
-    }
+    require(now <= time); // Don't change past
 
     endsAt = time;
     EndsAtChanged(endsAt);
@@ -409,12 +388,10 @@ contract Crowdsale is Haltable {
    * Design choice: no state restrictions on the set, so that we can fix fat finger mistakes.
    */
   function setPricingStrategy(PricingStrategy _pricingStrategy) onlyOwner {
-    pricingStrategy = _pricingStrategy;
 
     // Don't allow setting bad agent
-    if(!pricingStrategy.isPricingStrategy()) {
-      throw;
-    }
+    require(_pricingStrategy.isPricingStrategy());
+    pricingStrategy = _pricingStrategy;
   }
 
   /**
@@ -427,9 +404,7 @@ contract Crowdsale is Haltable {
   function setMultisig(address addr) public onlyOwner {
 
     // Change
-    if(investorCount > MAX_INVESTMENTS_BEFORE_MULTISIG_CHANGE) {
-      throw;
-    }
+    require(investorCount <= MAX_INVESTMENTS_BEFORE_MULTISIG_CHANGE);
 
     multisigWallet = addr;
   }
@@ -440,8 +415,8 @@ contract Crowdsale is Haltable {
    * The team can transfer the funds back on the smart contract in the case the minimum goal was not reached..
    */
   function loadRefund() public payable inState(State.Failure) {
-    if(msg.value == 0) throw;
-    loadedRefund = loadedRefund.plus(msg.value);
+    require(msg.value != 0);
+    loadedRefund = loadedRefund.add(msg.value);
   }
 
   /**
@@ -452,11 +427,11 @@ contract Crowdsale is Haltable {
    */
   function refund() public inState(State.Refunding) {
     uint256 weiValue = investedAmountOf[msg.sender];
-    if (weiValue == 0) throw;
+    require(weiValue != 0);
     investedAmountOf[msg.sender] = 0;
-    weiRefunded = weiRefunded.plus(weiValue);
+    weiRefunded = weiRefunded.add(weiValue);
     Refund(msg.sender, weiValue);
-    if (!msg.sender.send(weiValue)) throw;
+    require(msg.sender.send(weiValue));
   }
 
   /**
@@ -513,7 +488,7 @@ contract Crowdsale is Haltable {
 
   /** Modified allowing execution only if the crowdsale is currently running.  */
   modifier inState(State state) {
-    if(getState() != state) throw;
+    require(getState() == state);
     _;
   }
 

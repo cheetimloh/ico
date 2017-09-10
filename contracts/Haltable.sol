@@ -20,29 +20,33 @@ import "zeppelin/contracts/ownership/Ownable.sol";
 contract Haltable is Ownable {
   bool public halted;
 
+  event Halted(bool halted);
+
   modifier stopInEmergency {
-    if (halted) throw;
+    require(!halted);
     _;
   }
 
   modifier stopNonOwnersInEmergency {
-    if (halted && msg.sender != owner) throw;
+    require(!halted || msg.sender == owner);
     _;
   }
 
   modifier onlyInEmergency {
-    if (!halted) throw;
+    require(halted);
     _;
   }
 
   // called by the owner on emergency, triggers stopped state
   function halt() external onlyOwner {
     halted = true;
+    Halted(true);
   }
 
   // called by the owner on end of emergency, returns to normal state
   function unhalt() external onlyOwner onlyInEmergency {
     halted = false;
+    Halted(false);
   }
 
 }

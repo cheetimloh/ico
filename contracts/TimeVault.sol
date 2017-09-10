@@ -6,7 +6,7 @@
 
 pragma solidity ^0.4.8;
 
-import './StandardToken.sol';
+import './ICOStandardToken.sol';
 
 /**
  *
@@ -17,13 +17,13 @@ import './StandardToken.sol';
  *
  * See TokenVault for multi user implementation.
  */
-contract TimeVault is SafeMath {
+contract TimeVault {
 
   /** Interface flag to determine if address is for a real contract or not */
   bool public isTimeVault = true;
 
   /** Token we are holding */
-  StandardToken public token;
+  ICOStandardToken public token;
 
   /** Address that can claim tokens */
   address public teamMultisig;
@@ -33,15 +33,15 @@ contract TimeVault is SafeMath {
 
   event Unlocked();
 
-  function TimeVault(address _teamMultisig, StandardToken _token, uint _unlockedAt) {
+  function TimeVault(address _teamMultisig, ICOStandardToken _token, uint _unlockedAt) {
+
+    // Sanity check
+    require(_teamMultisig != 0x0);
+    require(address(_token) != 0x0);
 
     teamMultisig = _teamMultisig;
     token = _token;
     unlockedAt = _unlockedAt;
-
-    // Sanity check
-    if (teamMultisig == 0x0) throw;
-    if (address(token) == 0x0) throw;
   }
 
   function getTokenBalance() public constant returns (uint) {
@@ -50,7 +50,7 @@ contract TimeVault is SafeMath {
 
   function unlock() public {
     // Wait your turn!
-    if (now < unlockedAt) throw;
+    require(now >= unlockedAt);
 
     // StandardToken will throw in the case of transaction fails
     token.transfer(teamMultisig, getTokenBalance());
@@ -59,6 +59,6 @@ contract TimeVault is SafeMath {
   }
 
   // disallow ETH payment for this vault
-  function () { throw; }
+  function () { require(false); }
 
 }

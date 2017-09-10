@@ -8,7 +8,7 @@ pragma solidity ^0.4.6;
 
 
 import "./Crowdsale.sol";
-import "./SafeMathLib.sol";
+import "zeppelin/contracts/math/SafeMath.sol";
 
 /**
  * Collect funds from presale investors to be send to the crowdsale smart contract later.
@@ -21,7 +21,7 @@ import "./SafeMathLib.sol";
  */
 contract PresaleFundCollector is Ownable {
 
-  using SafeMathLib for uint;
+  using SafeMath for uint;
 
   /** How many investors when can carry per a single contract */
   uint public MAX_INVESTORS = 32;
@@ -55,17 +55,13 @@ contract PresaleFundCollector is Ownable {
    */
   function PresaleFundCollector(address _owner, uint _freezeEndsAt, uint _weiMinimumLimit) {
 
+    // Give argument
+    require(_freezeEndsAt != 0);
+
+    // Give argument
+    require(_weiMinimumLimit != 0);
+
     owner = _owner;
-
-    // Give argument
-    if(_freezeEndsAt == 0) {
-      throw;
-    }
-
-    // Give argument
-    if(_weiMinimumLimit == 0) {
-      throw;
-    }
 
     weiMinimumLimit = _weiMinimumLimit;
     freezeEndsAt = _freezeEndsAt;
@@ -77,24 +73,22 @@ contract PresaleFundCollector is Ownable {
   function invest() public payable {
 
     // Cannot invest anymore through crowdsale when moving has begun
-    if(moving) throw;
+    require(!moving);
 
     address investor = msg.sender;
 
     bool existing = balances[investor] > 0;
 
-    balances[investor] = balances[investor].plus(msg.value);
+    balances[investor] = balances[investor].add(msg.value);
 
     // Need to fulfill minimum limit
-    if(balances[investor] < weiMinimumLimit) {
-      throw;
-    }
+    require(balances[investor] >= weiMinimumLimit);
 
     // This is a new investor
     if(!existing) {
 
       // Limit number of investors to prevent too long loops
-      if(investorCount >= MAX_INVESTORS) throw;
+      require(investorCount < MAX_INVESTORS);
 
       investors.push(investor);
       investorCount++;
@@ -109,7 +103,7 @@ contract PresaleFundCollector is Ownable {
   function parcipateCrowdsaleInvestor(address investor) public {
 
     // Crowdsale not yet set
-    if(address(crowdsale) == 0) throw;
+    require(address(crowdsale) != 0);
 
     moving = true;
 
@@ -139,16 +133,16 @@ contract PresaleFundCollector is Ownable {
   function refund() {
 
     // Trying to ask refund too soon
-    if(now < freezeEndsAt) throw;
+    require(now >= freezeEndsAt);
 
     // We have started to move funds
     moving = true;
 
     address investor = msg.sender;
-    if(balances[investor] == 0) throw;
+    require(balances[investor] != 0);
     uint amount = balances[investor];
     delete balances[investor];
-    if(!investor.send(amount)) throw;
+    require(investor.send(amount));
     Refunded(investor, amount);
   }
 
@@ -161,6 +155,6 @@ contract PresaleFundCollector is Ownable {
 
   /** Explicitly call function from your wallet. */
   function() payable {
-    throw;
+    require(false);
   }
 }

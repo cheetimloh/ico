@@ -6,7 +6,7 @@
 
 pragma solidity ^0.4.8;
 
-import './StandardToken.sol';
+import "./FractionalERC20.sol";
 import "./UpgradeableToken.sol";
 import "./ReleasableToken.sol";
 import "./MintableToken.sol";
@@ -23,7 +23,7 @@ import "./MintableToken.sol";
  * - The token can be capped (supply set in the constructor) or uncapped (crowdsale contract can mint new tokens)
  *
  */
-contract CrowdsaleToken is ReleasableToken, MintableToken, UpgradeableToken {
+contract CrowdsaleToken is FractionalERC20, ReleasableToken, MintableToken, UpgradeableToken {
 
   /** Name and symbol were updated. */
   event UpdatedTokenInformation(string newName, string newSymbol);
@@ -31,8 +31,6 @@ contract CrowdsaleToken is ReleasableToken, MintableToken, UpgradeableToken {
   string public name;
 
   string public symbol;
-
-  uint public decimals;
 
   /**
    * Construct the token.
@@ -45,8 +43,9 @@ contract CrowdsaleToken is ReleasableToken, MintableToken, UpgradeableToken {
    * @param _decimals Number of decimal places
    * @param _mintable Are new tokens created over the crowdsale or do we distribute only the initial supply? Note that when the token becomes transferable the minting always ends.
    */
-  function CrowdsaleToken(string _name, string _symbol, uint _initialSupply, uint _decimals, bool _mintable)
-    UpgradeableToken(msg.sender) {
+  function CrowdsaleToken(string _name, string _symbol, uint _initialSupply, uint8 _decimals, bool _mintable)
+    UpgradeableToken(msg.sender)
+    MintableToken(msg.sender, _initialSupply, _mintable) {
 
     // Create any address, can be transferred
     // to team multisig via changeOwner(),
@@ -56,24 +55,7 @@ contract CrowdsaleToken is ReleasableToken, MintableToken, UpgradeableToken {
     name = _name;
     symbol = _symbol;
 
-    totalSupply = _initialSupply;
-
     decimals = _decimals;
-
-    // Create initially all balance on the team multisig
-    balances[owner] = totalSupply;
-
-    if(totalSupply > 0) {
-      Minted(owner, totalSupply);
-    }
-
-    // No more new supply allowed after the token creation
-    if(!_mintable) {
-      mintingFinished = true;
-      if(totalSupply == 0) {
-        throw; // Cannot create a token without supply and no minting
-      }
-    }
   }
 
   /**

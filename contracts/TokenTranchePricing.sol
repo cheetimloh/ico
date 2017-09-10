@@ -8,7 +8,7 @@ pragma solidity ^0.4.6;
 
 import "./PricingStrategy.sol";
 import "./Crowdsale.sol";
-import "./SafeMathLib.sol";
+import "zeppelin/contracts/math/SafeMath.sol";
 import "zeppelin/contracts/ownership/Ownable.sol";
 
 /// @dev Tranche based pricing with special support for pre-ico deals.
@@ -17,7 +17,7 @@ import "zeppelin/contracts/ownership/Ownable.sol";
 ///      to the whole order.
 contract TokenTranchePricing is PricingStrategy, Ownable {
 
-  using SafeMathLib for uint;
+  using SafeMath for uint;
 
   uint public constant MAX_TRANCHES = 10;
 
@@ -48,9 +48,7 @@ contract TokenTranchePricing is PricingStrategy, Ownable {
   /// @param _tranches uint[] tranches Pairs of (start amount, price)
   function TokenTranchePricing(uint[] _tranches) {
     // Need to have tuples, length check
-    if(_tranches.length % 2 == 1 || _tranches.length >= MAX_TRANCHES*2) {
-      throw;
-    }
+    require((_tranches.length % 2 == 0) && (_tranches.length < MAX_TRANCHES*2));
 
     trancheCount = _tranches.length / 2;
 
@@ -61,17 +59,13 @@ contract TokenTranchePricing is PricingStrategy, Ownable {
       tranches[i].price = _tranches[i*2+1];
 
       // No invalid steps
-      if((highestAmount != 0) && (tranches[i].amount <= highestAmount)) {
-        throw;
-      }
+      require((highestAmount == 0) || (tranches[i].amount > highestAmount));
 
       highestAmount = tranches[i].amount;
     }
 
     // Last tranche price must be zero, terminating the crowdale
-    if(tranches[trancheCount-1].price != 0) {
-      throw;
-    }
+    require(tranches[trancheCount-1].price == 0);
   }
 
   /// @dev This is invoked once for every pre-ICO address, set pricePerToken
@@ -136,21 +130,21 @@ contract TokenTranchePricing is PricingStrategy, Ownable {
   }
 
   /// @dev Calculate the current price for buy in amount.
-  function calculatePrice(uint value, uint weiRaised, uint tokensSold, address msgSender, uint decimals) public constant returns (uint) {
+  function calculatePrice(uint value, uint weiRaised, uint tokensSold, address msgSender, uint8 decimals) public constant returns (uint) {
 
-    uint multiplier = 10 ** decimals;
+    uint multiplier = 10 ** uint(decimals);
 
     // This investor is coming through pre-ico
     if(preicoAddresses[msgSender] > 0) {
-      return value.times(multiplier) / preicoAddresses[msgSender];
+      return value.mul(multiplier).div(preicoAddresses[msgSender]);
     }
 
     uint price = getCurrentPrice(tokensSold);
-    return value.times(multiplier) / price;
+    return value.mul(multiplier).div(price);
   }
 
   function() payable {
-    throw; // No money on this contract
+    require(false); // No money on this contract
   }
 
 }
